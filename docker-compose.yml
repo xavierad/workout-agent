@@ -1,0 +1,20 @@
+services:
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list 2>/dev/null | grep -q '${OLLAMA_MODEL}' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  ollama_data:
