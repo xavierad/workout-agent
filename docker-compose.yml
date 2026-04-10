@@ -2,7 +2,7 @@ services:
   ollama:
     build:
       context: .
-      dockerfile: Dockerfile.ollama
+      dockerfile: docker/Dockerfile.ollama
     ports:
       - "11434:11434"
     volumes:
@@ -17,13 +17,36 @@ services:
       start_period: 30s
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    profiles: ["cli"]
     depends_on:
       ollama:
         condition: service_healthy
+    env_file: .env
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL}
+    volumes:
+      - plan_data:/app/plans
+
+  webhook:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: uv run uvicorn app.webhook:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    volumes:
+      - plan_data:/app/plans
+    depends_on:
+      ollama:
+        condition: service_healthy
 
 volumes:
   ollama_data:
+  plan_data:
