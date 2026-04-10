@@ -8,25 +8,39 @@ import json
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from app.config import build_llm
+from app.strava import StravaClient
 from app.tools import AthleteState
-from app import strava
-
-llm = build_llm()
 
 
-# ── Graph nodes ────────────────────────────────────────────────────────────────
+class WorkoutAgent:
+    """LangGraph-powered workout planning and adaptation agent."""
 
-def fetch_activities(state: AthleteState) -> dict:
-    print("Fetching activities from Strava...")
-    activities = strava.get_recent_activities(limit=20)
-    print(f"  → {len(activities)} activities retrieved")
-    return {"activities": activities}
+    def __init__(self, llm, strava: StravaClient) -> None:
+        self._llm = llm
+        self._strava = strava
+        self._graph = self._build_graph()
 
+    # ── Public interface ──────────────────────────────────────────────────────
 
-def analyze_fitness(state: AthleteState) -> dict:
-    print("Analysing fitness...")
-    prompt = f"""You are an expert endurance coach and fitness analyst.
+    def run(self, objective: str, mode: str = "plan", current_plan: str | None = None) -> dict:
+        """Run the planning graph and return the state dict."""
+        return self._graph.invoke({
+            "objective": objective,
+            "mode": mode,
+            "current_plan": current_plan,
+        })
+
+    # ── Graph nodes ───────────────────────────────────────────────────────────
+
+    def _fetch_activities(self, state: AthleteState) -> dict:
+        print("Fetching activities from Strava...")
+        activities = self._strava.get_recent_activities(limit=20)
+        print(f"  → {len(activities)} activities retrieved")
+        return {"activities": activities}
+
+    def _analyze_fitness(self, state: AthleteState) -> dict:
+        print("Analysing fitness...")
+        prompt = f"""You are an expert endurance coach and fitness analyst.
 Below are the athlete's last {len(state.activities)} activities from Strava (JSON):
 
 {json.dumps(state.activities, indent=2)}
@@ -37,13 +51,12 @@ Write a concise fitness assessment (max 300 words) covering:
 3. Strengths and areas to improve
 4. Recovery status and readiness for hard training
 """
-    summary = llm.invoke([HumanMessage(content=prompt)]).content
-    return {"fitness_summary": summary}
+        summary = self._llm.invoke([HumanMessage(content=prompt)]).content
+        return {"fitness_summary": summary}
 
-
-def create_plan(state: AthleteState) -> dict:
-    print("Creating workout plan...")
-    prompt = f"""You are an expert endurance coach.
+    def _create_plan(self, state: AthleteState) -> dict:
+        print("Creating workout plan...")
+        prompt = f"""You are an expert endurance coach.
 Athlete objective: {state.objective}
 
 Recent fitness assessment:
@@ -58,14 +71,13 @@ The plan must include:
 
 Format the output in clear Markdown.
 """
-    plan = llm.invoke([HumanMessage(content=prompt)]).content
-    return {"updated_plan": plan}
+        plan = self._llm.invoke([HumanMessage(content=prompt)]).content
+        return {"updated_plan": plan}
 
-
-def adapt_plan(state: AthleteState) -> dict:
-    print("Adapting plan based on latest activity...")
-    latest = strava.get_latest_activity()
-    prompt = f"""You are an expert endurance coach.
+    def _adapt_plan(self, state: AthleteState) -> dict:
+        print("Adapting plan based on latest activity...")
+        latest = self._strava.get_latest_activity()
+        prompt = f"""You are an expert endurance coach.
 Athlete objective: {state.objective}
 
 Recent fitness assessment:
@@ -81,13 +93,12 @@ Analyse how the athlete performed relative to the plan, then rewrite the remaini
 to reflect this data. Adjust intensity, volume, or recovery days as needed.
 Explain what changed and why at the top, then output the full updated plan in Markdown.
 """
-    updated = llm.invoke([HumanMessage(content=prompt)]).content
-    return {"updated_plan": updated}
+        updated = self._llm.invoke([HumanMessage(content=prompt)]).content
+        return {"updated_plan": updated}
 
-
-def generate_response(state: AthleteState) -> dict:
-    plan = state.updated_plan or state.current_plan or ""
-    prompt = f"""You are a supportive, knowledgeable endurance coach.
+    def _generate_response(self, state: AthleteState) -> dict:
+        plan = state.updated_plan or state.current_plan or ""
+        prompt = f"""You are a supportive, knowledgeable endurance coach.
 Athlete objective: {state.objective}
 Mode: {"new plan created" if state.mode == "plan" else "plan adapted after new activity"}
 
@@ -95,35 +106,30 @@ Mode: {"new plan created" if state.mode == "plan" else "plan adapted after new a
 
 In 2–3 sentences, give the athlete an encouraging and actionable message about what to focus on next.
 """
-    response = llm.invoke([HumanMessage(content=prompt)]).content
-    return {"coach_response": response}
+        response = self._llm.invoke([HumanMessage(content=prompt)]).content
+        return {"coach_response": response}
 
+    def _route_mode(self, state: AthleteState) -> str:
+        return state.mode
 
-def route_mode(state: AthleteState) -> str:
-    return state.mode
+    # ── Graph builder ─────────────────────────────────────────────────────────
 
+    def _build_graph(self):
+        builder = StateGraph(AthleteState)
+        builder.add_node("fetch_activities", self._fetch_activities)
+        builder.add_node("analyze_fitness", self._analyze_fitness)
+        builder.add_node("create_plan", self._create_plan)
+        builder.add_node("adapt_plan", self._adapt_plan)
+        builder.add_node("generate_response", self._generate_response)
 
-# ── Graph ──────────────────────────────────────────────────────────────────────
-
-def build_graph():
-    builder = StateGraph(AthleteState)
-    builder.add_node("fetch_activities", fetch_activities)
-    builder.add_node("analyze_fitness", analyze_fitness)
-    builder.add_node("create_plan", create_plan)
-    builder.add_node("adapt_plan", adapt_plan)
-    builder.add_node("generate_response", generate_response)
-
-    builder.add_edge(START, "fetch_activities")
-    builder.add_edge("fetch_activities", "analyze_fitness")
-    builder.add_conditional_edges(
-        "analyze_fitness",
-        route_mode,
-        {"plan": "create_plan", "adapt": "adapt_plan"},
-    )
-    builder.add_edge("create_plan", "generate_response")
-    builder.add_edge("adapt_plan", "generate_response")
-    builder.add_edge("generate_response", END)
-    return builder.compile()
-
-
-graph = build_graph()
+        builder.add_edge(START, "fetch_activities")
+        builder.add_edge("fetch_activities", "analyze_fitness")
+        builder.add_conditional_edges(
+            "analyze_fitness",
+            self._route_mode,
+            {"plan": "create_plan", "adapt": "adapt_plan"},
+        )
+        builder.add_edge("create_plan", "generate_response")
+        builder.add_edge("adapt_plan", "generate_response")
+        builder.add_edge("generate_response", END)
+        return builder.compile()

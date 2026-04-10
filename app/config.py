@@ -11,13 +11,19 @@ PLAN_FILE.parent.mkdir(exist_ok=True)
 
 
 def build_llm(provider: str | None = None):
-    p = (provider or os.getenv("LLM_PROVIDER", "ollama")).lower()
+    p = (provider or os.getenv("LLM_PROVIDER", "groq")).lower()
     if p == "openai":
         from langchain_openai import ChatOpenAI
         model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         print(f"Using OpenAI ({model})")
         return ChatOpenAI(model=model, temperature=0)
-    
+
+    if p == "groq":
+        from langchain_groq import ChatGroq
+        model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        print(f"Using Groq ({model})")
+        return ChatGroq(model=model, temperature=0)
+
     from langchain_ollama import ChatOllama
     model = os.getenv("OLLAMA_MODEL", "llama3.1")
     print(f"Using Ollama ({model})")

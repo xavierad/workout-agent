@@ -75,8 +75,9 @@ async def receive_event(request: Request):
 async def _run_adapt():
     """Run adapt in-process without blocking the webhook response."""
     import json as _json
-    from app.config import PLAN_FILE as _PLAN_FILE
-    from app.agent import graph as _graph
+    from app.config import PLAN_FILE as _PLAN_FILE, build_llm as _build_llm
+    from app.agent import WorkoutAgent
+    from app.strava import get_client as _strava
 
     loop = asyncio.get_event_loop()
     try:
@@ -84,11 +85,12 @@ async def _run_adapt():
             if not _PLAN_FILE.exists():
                 return
             data = _json.loads(_PLAN_FILE.read_text())
-            result = _graph.invoke({
-                "objective": data["objective"],
-                "mode": "adapt",
-                "current_plan": data["plan"],
-            })
+            agent = WorkoutAgent(_build_llm(), _strava())
+            result = agent.run(
+                objective=data["objective"],
+                mode="adapt",
+                current_plan=data["plan"],
+            )
             _PLAN_FILE.write_text(_json.dumps({
                 "objective": data["objective"],
                 "plan": result["updated_plan"],

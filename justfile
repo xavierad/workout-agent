@@ -24,21 +24,37 @@ build:
 rebuild:
     docker compose build --no-cache
 
-# Start ollama + webhook services
+# Start webhook service (default: Groq/OpenAI)
 up:
-    docker compose up -d
+    docker compose up -d webhook
+
+# Start webhook + Ollama (use when LLM_PROVIDER=ollama)
+up-ollama:
+    docker compose --profile ollama up -d
 
 # Start with live logs
 up-logs:
-    docker compose up
+    docker compose up webhook
+
+# Start with live logs + Ollama
+up-logs-ollama:
+    docker compose --profile ollama up
 
 # Stop all services (keeps volumes / data)
 down:
     docker compose down
 
+# Stop all services including Ollama
+down-ollama:
+    docker compose --profile ollama down
+
 # Stop and wipe all data volumes
 down-clean:
     docker compose down -v
+
+# Stop and wipe all data volumes including Ollama
+down-clean-ollama:
+    docker compose --profile ollama down -v
 
 # Show service status
 status:
@@ -76,6 +92,21 @@ adapt:
 # Start interactive coaching chat
 chat:
     docker compose --profile cli run --rm app chat
+
+# Same as above but also starts Ollama first (use when LLM_PROVIDER=ollama)
+ollama-plan objective="":
+    #!/usr/bin/env sh
+    if [ -z "{{objective}}" ]; then
+        echo "Usage: just ollama-plan objective=\"Your training goal\""
+        exit 1
+    fi
+    docker compose --profile ollama --profile cli run --rm app plan --objective "{{objective}}"
+
+ollama-adapt:
+    docker compose --profile ollama --profile cli run --rm app adapt
+
+ollama-chat:
+    docker compose --profile ollama --profile cli run --rm app chat
 
 # ── Docker CLI equivalents ─────────────────────────────────────────────────────
 
@@ -127,7 +158,7 @@ delete-webhook id="":
 
 # Test Strava API connectivity
 test-strava:
-    uv run python -c "from app.strava import get_recent_activities; import json; print(json.dumps(get_recent_activities(limit=2), indent=2))"
+    uv run python -c "from dotenv import load_dotenv; load_dotenv(); from app.strava import get_client; import json; print(json.dumps(get_client().get_recent_activities(limit=2), indent=2))"
 
 # Test Ollama connectivity
 test-ollama:

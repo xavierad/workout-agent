@@ -11,7 +11,7 @@ from typing import Optional
 
 from langchain_core.tools import tool
 
-from app import strava
+from app.strava import get_client as _strava
 from app.config import PLAN_FILE
 
 
@@ -21,7 +21,7 @@ from app.config import PLAN_FILE
 def get_recent_activities(limit: int = 10) -> str:
     """Fetch the athlete's most recent Strava activities (up to 20).
     Returns key stats: date, sport type, distance, duration, heart rate, elevation."""
-    activities = strava.get_recent_activities(limit=min(limit, 20))
+    activities = _strava().get_recent_activities(limit=min(limit, 20))
     if not activities:
         return "No activities found."
     keep = ("date", "sport_type", "distance_km", "moving_time_min",
@@ -33,7 +33,7 @@ def get_recent_activities(limit: int = 10) -> str:
 @tool
 def get_latest_activity() -> str:
     """Fetch the single most recent Strava activity with full stats."""
-    activity = strava.get_latest_activity()
+    activity = _strava().get_latest_activity()
     if not activity:
         return "No recent activity found."
     return json.dumps(activity, indent=2)
@@ -43,7 +43,7 @@ def get_latest_activity() -> str:
 def get_weekly_volume(weeks: int = 4) -> str:
     """Summarise training volume per week for the last N weeks.
     Aggregates total distance (km), total duration (min), and number of sessions per sport."""
-    activities = strava.get_recent_activities(limit=50)
+    activities = _strava().get_recent_activities(limit=50)
     if not activities:
         return "No activities found."
 

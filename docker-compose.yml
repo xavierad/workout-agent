@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.ollama
+    profiles: ["ollama"]
     ports:
       - "11434:11434"
     volumes:
@@ -21,9 +22,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     profiles: ["cli"]
-    depends_on:
-      ollama:
-        condition: service_healthy
     env_file: .env
     environment:
       - OLLAMA_HOST=http://ollama:11434
@@ -43,9 +41,6 @@ services:
       - OLLAMA_HOST=http://ollama:11434
     volumes:
       - plan_data:/app/plans
-    depends_on:
-      ollama:
-        condition: service_healthy
 
 volumes:
   ollama_data:
