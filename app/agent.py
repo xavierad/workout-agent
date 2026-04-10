@@ -4,6 +4,7 @@ Handles plan creation and adaptation based on Strava data.
 """
 
 import json
+import textwrap
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
@@ -40,72 +41,100 @@ class WorkoutAgent:
 
     def _analyze_fitness(self, state: AthleteState) -> dict:
         print("Analysing fitness...")
-        prompt = f"""You are an expert endurance coach and fitness analyst.
-Below are the athlete's last {len(state.activities)} activities from Strava (JSON):
+        prompt = textwrap.dedent(f"""
+            You are an expert endurance coach and sports scientist.
 
-{json.dumps(state.activities, indent=2)}
+            ## Athlete Activity Data ({len(state.activities)} recent sessions)
+            ```json
+            {json.dumps(state.activities, indent=2)}
+            ```
 
-Write a concise fitness assessment (max 300 words) covering:
-1. Current training load and weekly volume
-2. Trends (improving / plateauing / declining)
-3. Strengths and areas to improve
-4. Recovery status and readiness for hard training
-"""
+            ## Task
+            Write a concise fitness assessment (max 300 words) structured as follows:
+
+            1. **Training Load & Weekly Volume** — total distance, time, and session frequency
+            2. **Trends** — improving / plateauing / declining, and why
+            3. **Strengths & Areas to Improve** — what the data shows the athlete does well and where to focus
+            4. **Recovery & Readiness** — current fatigue level and readiness for hard training
+
+            Be specific and data-driven. Reference actual numbers from the activities where relevant.
+        """).strip()
         summary = self._llm.invoke([HumanMessage(content=prompt)]).content
         return {"fitness_summary": summary}
 
     def _create_plan(self, state: AthleteState) -> dict:
         print("Creating workout plan...")
-        prompt = f"""You are an expert endurance coach.
-Athlete objective: {state.objective}
+        prompt = textwrap.dedent(f"""
+            You are an expert endurance coach.
 
-Recent fitness assessment:
-{state.fitness_summary}
+            ## Athlete Objective
+            {state.objective}
 
-Create a structured 4-week progressive training plan tailored to this athlete.
-The plan must include:
-- Day-by-day workout schedule (Mon–Sun × 4 weeks)
-- Specific targets per session: sport type, duration or distance, intensity zone / effort level
-- A deload week in week 4
-- Brief rationale for the structure
+            ## Fitness Assessment
+            {state.fitness_summary}
 
-Format the output in clear Markdown.
-"""
+            ## Task
+            Design a structured progressive training plan tailored to this athlete's objective and current fitness.
+
+            Guidelines:
+            - Infer the plan duration from the objective (e.g. race in 8 weeks → 8-week plan; general fitness → 4-week rolling block)
+            - Provide a day-by-day schedule (Mon–Sun) for each week
+            - Specify for every session: sport, duration or distance, and intensity zone / perceived effort
+            - Include a deload/recovery week at the appropriate point in the cycle
+            - Open with a brief rationale explaining the chosen duration, periodisation logic, and key focus areas
+
+            Format the entire output in clear, well-structured Markdown.
+        """).strip()
         plan = self._llm.invoke([HumanMessage(content=prompt)]).content
         return {"updated_plan": plan}
 
     def _adapt_plan(self, state: AthleteState) -> dict:
         print("Adapting plan based on latest activity...")
         latest = self._strava.get_latest_activity()
-        prompt = f"""You are an expert endurance coach.
-Athlete objective: {state.objective}
+        prompt = textwrap.dedent(f"""
+            You are an expert endurance coach reviewing an athlete's latest performance.
 
-Recent fitness assessment:
-{state.fitness_summary}
+            ## Athlete Objective
+            {state.objective}
 
-Current training plan:
-{state.current_plan}
+            ## Fitness Assessment
+            {state.fitness_summary}
 
-Latest uploaded activity:
-{json.dumps(latest, indent=2)}
+            ## Current Training Plan
+            {state.current_plan}
 
-Analyse how the athlete performed relative to the plan, then rewrite the remaining weeks of the plan
-to reflect this data. Adjust intensity, volume, or recovery days as needed.
-Explain what changed and why at the top, then output the full updated plan in Markdown.
-"""
+            ## Latest Activity
+            ```json
+            {json.dumps(latest, indent=2)}
+            ```
+
+            ## Task
+            1. **Performance Analysis** — assess how the athlete performed relative to what the plan called for
+            2. **Recommended Adjustments** — explain what needs to change and why (intensity, volume, recovery, pacing)
+            3. **Updated Plan** — rewrite the remaining weeks of the plan incorporating those adjustments
+
+            Format the output in clear Markdown, starting with the analysis before the updated plan.
+        """).strip()
         updated = self._llm.invoke([HumanMessage(content=prompt)]).content
         return {"updated_plan": updated}
 
     def _generate_response(self, state: AthleteState) -> dict:
         plan = state.updated_plan or state.current_plan or ""
-        prompt = f"""You are a supportive, knowledgeable endurance coach.
-Athlete objective: {state.objective}
-Mode: {"new plan created" if state.mode == "plan" else "plan adapted after new activity"}
+        mode_label = "new plan created" if state.mode == "plan" else "plan adapted after latest activity"
+        prompt = textwrap.dedent(f"""
+            You are a supportive and knowledgeable endurance coach.
 
-{plan[:600]}
+            ## Context
+            - Athlete objective: {state.objective}
+            - Status: {mode_label}
 
-In 2–3 sentences, give the athlete an encouraging and actionable message about what to focus on next.
-"""
+            ## Plan Summary (first 600 chars)
+            {plan[:600]}
+
+            ## Task
+            In 2–3 sentences, deliver an encouraging and actionable coaching message.
+            Focus on what the athlete should prioritise in their very next session.
+        """).strip()
         response = self._llm.invoke([HumanMessage(content=prompt)]).content
         return {"coach_response": response}
 

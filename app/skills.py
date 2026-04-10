@@ -18,10 +18,10 @@ from app.config import PLAN_FILE
 # ── Strava tools ───────────────────────────────────────────────────────────────
 
 @tool
-def get_recent_activities(limit: int = 10) -> str:
+def get_recent_activities(limit: int | str = 10) -> str:
     """Fetch the athlete's most recent Strava activities (up to 20).
     Returns key stats: date, sport type, distance, duration, heart rate, elevation."""
-    activities = _strava().get_recent_activities(limit=min(limit, 20))
+    activities = _strava().get_recent_activities(limit=min(int(limit), 20))
     if not activities:
         return "No activities found."
     keep = ("date", "sport_type", "distance_km", "moving_time_min",
@@ -40,9 +40,10 @@ def get_latest_activity() -> str:
 
 
 @tool
-def get_weekly_volume(weeks: int = 4) -> str:
+def get_weekly_volume(weeks: int | str = 4) -> str:
     """Summarise training volume per week for the last N weeks.
     Aggregates total distance (km), total duration (min), and number of sessions per sport."""
+    weeks = int(weeks)
     activities = _strava().get_recent_activities(limit=50)
     if not activities:
         return "No activities found."
@@ -94,12 +95,29 @@ def get_plan_objective() -> str:
     return json.loads(PLAN_FILE.read_text()).get("objective", "No objective set.")
 
 
+@tool
+def save_plan(plan: str, objective: str = "") -> str:
+    """Save an updated training plan to disk so it persists across sessions.
+    Call this whenever you produce a new or modified training plan.
+    'plan' is the full plan text in Markdown. 'objective' is optional — if omitted the existing objective is kept."""
+    from datetime import datetime, timezone
+    existing = json.loads(PLAN_FILE.read_text()) if PLAN_FILE.exists() else {}
+    final_objective = objective.strip() or existing.get("objective", "")
+    PLAN_FILE.write_text(json.dumps({
+        "objective": final_objective,
+        "plan": plan,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }, indent=2))
+    return f"Plan saved (objective: \"{final_objective}\")."
+
+
 # ── Training science tools ─────────────────────────────────────────────────────
 
 @tool
-def calculate_heart_rate_zones(max_hr: int) -> str:
+def calculate_heart_rate_zones(max_hr: int | str) -> str:
     """Calculate the 5 heart rate training zones given the athlete's maximum heart rate.
     Zones follow the classic 5-zone model used by most endurance coaches."""
+    max_hr = int(max_hr)
     zones = [
         ("Zone 1 – Recovery",     0.50, 0.60),
         ("Zone 2 – Aerobic base", 0.60, 0.70),
@@ -113,10 +131,10 @@ def calculate_heart_rate_zones(max_hr: int) -> str:
 
 
 @tool
-def estimate_race_time(distance_km: float, avg_pace_min_per_km: float) -> str:
+def estimate_race_time(distance_km: float | str, avg_pace_min_per_km: float | str) -> str:
     """Estimate finish time for a race given distance and average pace (min/km).
     Returns total time formatted as HH:MM:SS."""
-    total_min = distance_km * avg_pace_min_per_km
+    total_min = float(distance_km) * float(avg_pace_min_per_km)
     h = int(total_min // 60)
     m = int(total_min % 60)
     s = int((total_min - int(total_min)) * 60)
@@ -124,9 +142,9 @@ def estimate_race_time(distance_km: float, avg_pace_min_per_km: float) -> str:
 
 
 @tool
-def calculate_required_pace(distance_km: float, target_time_min: float) -> str:
+def calculate_required_pace(distance_km: float | str, target_time_min: float | str) -> str:
     """Calculate the average pace (min/km and min/mile) required to finish a race in a target time."""
-    pace_km = target_time_min / distance_km
+    pace_km = float(target_time_min) / float(distance_km)
     pace_mile = pace_km * 1.60934
     km_min = int(pace_km)
     km_sec = int((pace_km - km_min) * 60)
@@ -137,9 +155,10 @@ def calculate_required_pace(distance_km: float, target_time_min: float) -> str:
 
 
 @tool
-def calculate_power_zones(ftp: int) -> str:
+def calculate_power_zones(ftp: int | str) -> str:
     """Calculate the 7 cycling power training zones given the athlete's Functional Threshold Power (FTP) in watts.
     Uses the classic Coggan power zone model. FTP is the average power sustainable for ~1 hour."""
+    ftp = int(ftp)
     zones = [
         ("Zone 1 – Active Recovery",    0.00, 0.55),
         ("Zone 2 – Endurance",          0.55, 0.75),
@@ -170,6 +189,7 @@ ALL_SKILLS = [
     get_weekly_volume,
     get_current_plan,
     get_plan_objective,
+    save_plan,
     calculate_heart_rate_zones,
     calculate_power_zones,
     estimate_race_time,

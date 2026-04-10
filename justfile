@@ -21,7 +21,7 @@ build:
     docker compose build
 
 # Build without cache (force full rebuild)
-rebuild:
+rebuild: down
     docker compose build --no-cache
 
 # Start webhook service (default: Groq/OpenAI)
@@ -163,15 +163,6 @@ test-strava:
 # Test Ollama connectivity
 test-ollama:
     curl -s http://localhost:11434/api/tags | python3 -m json.tool
-
-# Show current training plan
-show-plan:
-    #!/usr/bin/env sh
-    if [ -f plans/workout_plan.json ]; then
-        python3 -c "import json; d=json.load(open('plans/workout_plan.json')); print('Objective:', d['objective']); print('Updated:', d['updated_at']); print(); print(d['plan'])"
-    else
-        echo "No plan found. Run: just plan objective=\"...\""
-    fi
 
 # Validate imports are clean
 check:
