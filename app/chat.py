@@ -28,7 +28,7 @@ class CoachChat:
 
     def __init__(self, llm, skills: list) -> None:
         self._agent = create_react_agent(llm, skills, prompt=_SYSTEM_PROMPT)
-        self._history: list = []
+        self._history: list = self._load_plan_into_history()
 
     # ── Public interface ──────────────────────────────────────────────────────
 
@@ -77,6 +77,27 @@ class CoachChat:
         except Exception as e:
             self._history.pop()
             raise
+
+    @staticmethod
+    def _load_plan_into_history() -> list:
+        """Pre-load the saved plan into history so the agent has it from turn 1."""
+        if not PLAN_FILE.exists():
+            return []
+        data = json.loads(PLAN_FILE.read_text())
+        plan_text = data.get("plan", "")
+        objective = data.get("objective", "")
+        updated_at = data.get("updated_at", "")
+        if not plan_text:
+            return []
+        return [
+            HumanMessage(content="Here is my current training plan — keep it in mind for our conversation."),
+            AIMessage(content=(
+                f"Got it. Here's your current plan on file:\n\n"
+                f"**Objective:** {objective}\n"
+                f"**Last updated:** {updated_at}\n\n"
+                f"{plan_text}"
+            )),
+        ]
 
     def _print_banner(self) -> None:
         from app.skills import ALL_SKILLS
