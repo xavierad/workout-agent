@@ -1,2 +1,14 @@
 *.env
 __pycache__/
+.venv/
+
+# Frontend
+node_modules/
+web/dist/
+
+# Python build artefacts
+*.pyc
+*.pyo
+.pytest_cache/
+dist/
+*.egg-info/

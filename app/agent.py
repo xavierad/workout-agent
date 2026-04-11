@@ -8,6 +8,21 @@ import textwrap
 
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, Field
+
+
+class AdaptDecision(BaseModel):
+    """Structured decision from the adapt-plan LLM call."""
+    needs_adaptation: bool = Field(
+        description="True if the athlete's actual performance deviates from plan expectations and the plan should change."
+    )
+    reason: str = Field(
+        description="Concise (2–4 sentence) assessment of the performance vs. plan expectations and why the plan does or does not need changing."
+    )
+    updated_plan: str | None = Field(
+        default=None,
+        description="Full updated training plan in Markdown (required when needs_adaptation is True, null otherwise).",
+    )
 
 from app.strava import StravaClient
 from app.tools import AthleteState
@@ -23,12 +38,19 @@ class WorkoutAgent:
 
     # ── Public interface ──────────────────────────────────────────────────────
 
-    def run(self, objective: str, mode: str = "plan", current_plan: str | None = None) -> dict:
+    def run(
+        self,
+        objective: str,
+        mode: str = "plan",
+        current_plan: str | None = None,
+        latest_activity: dict | None = None,
+    ) -> dict:
         """Run the planning graph and return the state dict."""
         return self._graph.invoke({
             "objective": objective,
             "mode": mode,
             "current_plan": current_plan,
+            "latest_activity": latest_activity,
         })
 
     # ── Graph nodes ───────────────────────────────────────────────────────────
@@ -89,8 +111,8 @@ class WorkoutAgent:
         return {"updated_plan": plan}
 
     def _adapt_plan(self, state: AthleteState) -> dict:
-        print("Adapting plan based on latest activity...")
-        latest = self._strava.get_latest_activity()
+        print("Evaluating whether plan adaptation is needed...")
+        latest = state.latest_activity or self._strava.get_latest_activity()
         prompt = textwrap.dedent(f"""
             You are an expert endurance coach reviewing an athlete's latest performance.
 
@@ -108,17 +130,35 @@ class WorkoutAgent:
             {json.dumps(latest, indent=2)}
             ```
 
-            ## Task
-            1. **Performance Analysis** — assess how the athlete performed relative to what the plan called for
-            2. **Recommended Adjustments** — explain what needs to change and why (intensity, volume, recovery, pacing)
-            3. **Updated Plan** — rewrite the remaining weeks of the plan incorporating those adjustments
+            ## Decision Task
+            Compare the athlete's latest activity to what the plan likely called for on that day.
 
-            Format the output in clear Markdown, starting with the analysis before the updated plan.
+            Return **needs_adaptation = false** if performance was broadly in line with expectations
+            (i.e. correct sport, reasonable intensity, no signs of unexpected fatigue or injury).
+
+            Return **needs_adaptation = true** only when there is a meaningful deviation that warrants changes:
+            - Significant under-performance (high HR, low pace/power, shortened session) suggesting fatigue/illness
+            - Significant over-performance (well above planned intensity) suggesting the plan is too easy
+            - Missed session that should shift the schedule
+            - Signs of injury or excessive strain
+
+            When needs_adaptation is true, provide a full **updated_plan** rewriting the remaining weeks.
+            When needs_adaptation is false, set updated_plan to null.
         """).strip()
-        updated = self._llm.invoke([HumanMessage(content=prompt)]).content
-        return {"updated_plan": updated}
+        structured_llm = self._llm.with_structured_output(AdaptDecision)
+        decision: AdaptDecision = structured_llm.invoke([HumanMessage(content=prompt)])
+        print(f"  → needs_adaptation={decision.needs_adaptation}: {decision.reason[:80]}")
+        return {
+            "needs_adaptation": decision.needs_adaptation,
+            "adapt_reason": decision.reason,
+            "updated_plan": decision.updated_plan if decision.needs_adaptation else None,
+        }
 
     def _generate_response(self, state: AthleteState) -> dict:
+        # Adapt with no changes — return the LLM's own assessment as the response
+        if state.mode == "adapt" and state.needs_adaptation is False:
+            return {"coach_response": state.adapt_reason}
+
         plan = state.updated_plan or state.current_plan or ""
         mode_label = "new plan created" if state.mode == "plan" else "plan adapted after latest activity"
         prompt = textwrap.dedent(f"""

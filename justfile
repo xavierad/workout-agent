@@ -24,37 +24,21 @@ build:
 rebuild: down
     docker compose build --no-cache
 
-# Start webhook service (default: Groq/OpenAI)
+# Start API service
 up:
-    docker compose up -d webhook
-
-# Start webhook + Ollama (use when LLM_PROVIDER=ollama)
-up-ollama:
-    docker compose --profile ollama up -d
+    docker compose up -d api
 
 # Start with live logs
 up-logs:
-    docker compose up webhook
-
-# Start with live logs + Ollama
-up-logs-ollama:
-    docker compose --profile ollama up
+    docker compose up api
 
 # Stop all services (keeps volumes / data)
 down:
     docker compose down
 
-# Stop all services including Ollama
-down-ollama:
-    docker compose --profile ollama down
-
 # Stop and wipe all data volumes
 down-clean:
     docker compose down -v
-
-# Stop and wipe all data volumes including Ollama
-down-clean-ollama:
-    docker compose --profile ollama down -v
 
 # Show service status
 status:
@@ -66,13 +50,9 @@ status:
 logs:
     docker compose logs -f
 
-# Follow webhook logs only
-logs-webhook:
-    docker compose logs -f webhook
-
-# Follow ollama logs only
-logs-ollama:
-    docker compose logs -f ollama
+# Follow API logs only
+logs-api:
+    docker compose logs -f api
 
 # ── Agent CLI ──────────────────────────────────────────────────────────────────
 
@@ -93,43 +73,19 @@ adapt:
 chat:
     docker compose --profile cli run --rm app chat
 
-# Same as above but also starts Ollama first (use when LLM_PROVIDER=ollama)
-ollama-plan objective="":
-    #!/usr/bin/env sh
-    if [ -z "{{objective}}" ]; then
-        echo "Usage: just ollama-plan objective=\"Your training goal\""
-        exit 1
-    fi
-    docker compose --profile ollama --profile cli run --rm app plan --objective "{{objective}}"
+# ── Frontend ──────────────────────────────────────────────────────────────────
 
-ollama-adapt:
-    docker compose --profile ollama --profile cli run --rm app adapt
+# Install frontend dependencies
+install-frontend:
+    cd web && npm ci
 
-ollama-chat:
-    docker compose --profile ollama --profile cli run --rm app chat
+# Run Vite dev server (proxies API to localhost:8000)
+dev:
+    cd web && npm run dev
 
-# ── Docker CLI equivalents ─────────────────────────────────────────────────────
-
-# Run plan via Docker (usage: just docker-plan objective="...")
-docker-plan objective="":
-    #!/usr/bin/env sh
-    if [ -z "{{objective}}" ]; then
-        echo "Usage: just docker-plan objective=\"Your training goal\""
-        exit 1
-    fi
-    docker compose --profile cli run --rm app plan --objective "{{objective}}"
-
-# Run adapt via Docker
-docker-adapt:
-    docker compose --profile cli run --rm app adapt
-
-# Run chat via Docker
-docker-chat:
-    docker compose --profile cli run --rm app chat
-
-# Open a shell inside the app container
-shell:
-    docker compose --profile cli run --rm app bash
+# Build frontend for production
+build-frontend:
+    cd web && npm run build
 
 # ── Webhook management ─────────────────────────────────────────────────────────
 
@@ -159,10 +115,6 @@ delete-webhook id="":
 # Test Strava API connectivity
 test-strava:
     uv run python -c "from dotenv import load_dotenv; load_dotenv(); from app.strava import get_client; import json; print(json.dumps(get_client().get_recent_activities(limit=2), indent=2))"
-
-# Test Ollama connectivity
-test-ollama:
-    curl -s http://localhost:11434/api/tags | python3 -m json.tool
 
 # Validate imports are clean
 check:
