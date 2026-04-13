@@ -167,8 +167,9 @@ def calculate_required_pace(distance_km: float | str, target_time_min: float | s
     km_sec = int((pace_km - km_min) * 60)
     mi_min = int(pace_mile)
     mi_sec = int((pace_mile - mi_min) * 60)
+    total_min = float(target_time_min)
     return (f"Required pace: {km_min}:{km_sec:02d} /km  ({mi_min}:{mi_sec:02d} /mile)"
-            f"\nTotal duration: {int(target_time_min//60)}h {int(target_time_min%60)}m")
+            f"\nTotal duration: {int(total_min//60)}h {int(total_min%60)}m")
 
 
 @tool

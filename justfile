@@ -110,6 +110,36 @@ list-webhooks:
 delete-webhook id="":
     uv run scripts/register_webhook.py delete --id "{{id}}"
 
+# ── Tests ─────────────────────────────────────────────────────────────────────
+
+# Run all tests
+test:
+    uv run pytest tests/ -v
+
+# Run unit tests only
+test-unit:
+    uv run pytest tests/unit/ -v
+
+# Run integration tests only
+test-integration:
+    uv run pytest tests/integration/ -v
+
+# Run tests with coverage report
+test-cov:
+    uv run pytest tests/ -v --cov=app --cov-report=term-missing
+
+# Run all tests inside the API Docker container
+test-docker:
+    docker compose run --rm --no-deps api uv run pytest tests/ -v
+
+# Run unit tests inside Docker
+test-docker-unit:
+    docker compose run --rm --no-deps api uv run pytest tests/unit/ -v
+
+# Run integration tests inside Docker
+test-docker-integration:
+    docker compose run --rm --no-deps api uv run pytest tests/integration/ -v
+
 # ── Debug ──────────────────────────────────────────────────────────────────────
 
 # Test Strava API connectivity
