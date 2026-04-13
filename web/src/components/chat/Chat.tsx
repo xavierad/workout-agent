@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Send, Wrench } from 'lucide-react'
+import { Send, Wrench, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { ChatMessage } from '../../types'
 
@@ -10,9 +10,10 @@ interface ChatProps {
   isThinking: boolean
   activeTools: string[]
   onSend: (message: string) => void
+  onClear: () => void
 }
 
-export function Chat({ messages, isThinking, activeTools, onSend }: ChatProps) {
+export function Chat({ messages, isThinking, activeTools, onSend, onClear }: ChatProps) {
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -47,9 +48,20 @@ export function Chat({ messages, isThinking, activeTools, onSend }: ChatProps) {
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-100">
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-zinc-800">
-        <span className="text-sm font-semibold text-zinc-100">Coach</span>
-        <span className="ml-2 text-xs text-zinc-500">Ask about your plan, zones, sessions…</span>
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+        <div>
+          <span className="text-sm font-semibold text-zinc-100">Coach</span>
+          <span className="ml-2 text-xs text-zinc-500">Ask about your plan, zones, sessions…</span>
+        </div>
+        {messages.length > 0 && (
+          <button
+            onClick={onClear}
+            title="Clear conversation"
+            className="p-1.5 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Messages */}

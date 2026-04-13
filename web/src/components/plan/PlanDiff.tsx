@@ -23,10 +23,10 @@ export function PlanDiff({ plan }: PlanDiffProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-6 px-6 py-3 border-b border-zinc-200 bg-zinc-50 text-sm font-medium">
-        <span className="text-zinc-500">Comparing current → proposed</span>
-        <span className="text-green-600">+{stats.added} lines added</span>
-        <span className="text-red-500">−{stats.removed} lines removed</span>
+      <div className="shrink-0 flex items-center gap-6 px-6 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm font-medium">
+        <span className="text-zinc-500 dark:text-zinc-400">Comparing current → proposed</span>
+        <span className="text-green-600 dark:text-green-400">+{stats.added} lines added</span>
+        <span className="text-red-500 dark:text-red-400">−{stats.removed} lines removed</span>
         {plan.pending_updated_at && (
           <span className="ml-auto text-xs text-zinc-400 font-normal">
             Proposed {new Date(plan.pending_updated_at).toLocaleString()}
@@ -46,19 +46,19 @@ export function PlanDiff({ plan }: PlanDiffProps) {
               key={`${ci}-${li}`}
               className={`flex items-start px-4 py-px ${
                 change.added
-                  ? 'bg-green-50 border-l-4 border-green-400'
+                  ? 'bg-green-50 dark:bg-green-950/50 border-l-4 border-green-400 dark:border-green-700'
                   : change.removed
-                    ? 'bg-red-50 border-l-4 border-red-400'
+                    ? 'bg-red-50 dark:bg-red-950/50 border-l-4 border-red-400 dark:border-red-700'
                     : 'border-l-4 border-transparent'
               }`}
             >
               <span
                 className={`shrink-0 w-5 select-none ${
                   change.added
-                    ? 'text-green-600'
+                    ? 'text-green-600 dark:text-green-400'
                     : change.removed
-                      ? 'text-red-500'
-                      : 'text-zinc-300'
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-zinc-300 dark:text-zinc-600'
                 }`}
               >
                 {change.added ? '+' : change.removed ? '−' : ' '}
@@ -66,10 +66,10 @@ export function PlanDiff({ plan }: PlanDiffProps) {
               <span
                 className={`break-all whitespace-pre-wrap ${
                   change.added
-                    ? 'text-green-900'
+                    ? 'text-green-900 dark:text-green-300'
                     : change.removed
-                      ? 'text-red-800 line-through opacity-70'
-                      : 'text-zinc-500'
+                      ? 'text-red-800 dark:text-red-400 line-through opacity-70'
+                      : 'text-zinc-500 dark:text-zinc-400'
                 }`}
               >
                 {line || '\u00a0'}

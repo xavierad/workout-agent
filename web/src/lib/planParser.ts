@@ -34,15 +34,22 @@ export function inferWorkoutType(text: string): WorkoutType {
 
 function parseWeekDays(weekContent: string): { summary: string; days: DayWorkout[] } {
   const lines = weekContent.split('\n')
+  // Match:  ### Monday  |  **Monday**  |  * Monday:  |  - Monday:  |  Monday:
   const dayPattern = new RegExp(
-    `^#{1,4}\\s*(${DAYS.join('|')})|^\\*\\*(${DAYS.join('|')})\\*\\*`,
+    `^#{1,4}\\s*(${DAYS.join('|')})\\b` +
+    `|^\\*\\*(${DAYS.join('|')})\\b` +
+    `|^[*\\-]\\s*(${DAYS.join('|')})\\s*:` +
+    `|^(${DAYS.join('|')})\\s*:`,
     'i',
   )
 
   const dayStarts: { index: number; day: string }[] = []
   lines.forEach((line, i) => {
     const m = line.match(dayPattern)
-    if (m) dayStarts.push({ index: i, day: (m[1] ?? m[2]).trim() })
+    if (m) {
+      const day = (m[1] ?? m[2] ?? m[3] ?? m[4]).trim()
+      dayStarts.push({ index: i, day })
+    }
   })
 
   const summaryEnd = dayStarts.length > 0 ? dayStarts[0].index : lines.length
@@ -52,7 +59,15 @@ function parseWeekDays(weekContent: string): { summary: string; days: DayWorkout
 
   const days: DayWorkout[] = dayStarts.map(({ index, day }, i) => {
     const end = i + 1 < dayStarts.length ? dayStarts[i + 1].index : lines.length
-    const body = lines.slice(index + 1, end).join('\n').trim()
+    // For bullet-style lines the content is on the same line after the day name
+    const headerLine = lines[index]
+    const inlineSuffix = headerLine
+      .replace(new RegExp(`^[*\\-]?\\s*\\*{0,2}${day}\\*{0,2}\\s*:?\\s*`, 'i'), '')
+      .trim()
+    const bodyLines = lines.slice(index + 1, end).join('\n').trim()
+    const body = inlineSuffix
+      ? inlineSuffix + (bodyLines ? '\n' + bodyLines : '')
+      : bodyLines
     const titleLine = body.split('\n').find(l => l.trim()) ?? ''
     const title = titleLine.replace(/^[#*\-\s]+/, '').replace(/\*+/g, '').trim() || day
     const canonical = DAYS.find(d => d.toLowerCase() === day.toLowerCase()) ?? day
@@ -69,7 +84,8 @@ export function parsePlan(markdown: string): ParsedWeek[] {
   const weekStarts: { index: number; title: string }[] = []
 
   lines.forEach((line, i) => {
-    if (/^#{1,3}\s+week\s+\d+/i.test(line.trim())) {
+    // Match: ## Week 1  |  ## Week of April 13th  |  # Week 1: Base Block  etc.
+    if (/^#{1,3}\s+week\b/i.test(line.trim())) {
       weekStarts.push({ index: i, title: line.replace(/^#+\s*/, '').trim() })
     }
   })

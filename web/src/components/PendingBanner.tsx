@@ -10,14 +10,14 @@ interface PendingBannerProps {
 
 export function PendingBanner({ message, viewMode, onToggleDiff, onAccept, onReject }: PendingBannerProps) {
   return (
-    <div className="flex items-center gap-3 px-6 py-2.5 bg-amber-50 border-b border-amber-200 text-sm">
-      <span className="text-amber-600 font-medium flex-1">{message}</span>
+    <div className="flex items-center gap-3 px-6 py-2.5 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800 text-sm">
+      <span className="text-amber-600 dark:text-amber-400 font-medium flex-1">{message}</span>
       <button
         onClick={onToggleDiff}
         className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors ${
           viewMode === 'diff'
-            ? 'bg-amber-200 text-amber-800'
-            : 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-100'
+            ? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200'
+            : 'bg-white dark:bg-zinc-800 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-zinc-700'
         }`}
       >
         <Diff className="w-3.5 h-3.5" />
@@ -32,7 +32,7 @@ export function PendingBanner({ message, viewMode, onToggleDiff, onAccept, onRej
       </button>
       <button
         onClick={onReject}
-        className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
       >
         <X className="w-3.5 h-3.5" />
         Discard
