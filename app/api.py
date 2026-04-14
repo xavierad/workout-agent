@@ -74,6 +74,15 @@ async def _broadcast(event: dict) -> None:
 
 # ── Plan API ───────────────────────────────────────────────────────────────────
 
+@app.get("/api/activities")
+def get_activities(limit: int = Query(default=40, ge=1, le=100)):
+    try:
+        return {"activities": strava_client().get_recent_activities(limit=limit)}
+    except Exception as e:
+        log.warning("Strava activities fetch failed: %s", e)
+        return {"activities": []}
+
+
 @app.get("/api/plan")
 def get_plan():
     data = _load_plan()

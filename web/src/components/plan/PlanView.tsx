@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { ChevronLeft, ChevronRight, Bike, Footprints, Waves, Dumbbell, Moon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Bike, Footprints, Waves, Dumbbell, Moon, CheckCircle2, ClipboardList } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { Plan } from '../../types'
-import { parsePlan, DAYS, DAY_SHORT, type WorkoutType, type DayWorkout, type ParsedWeek } from '../../lib/planParser'
+import type { Plan, Activity } from '../../types'
+import {
+  parsePlan, deriveWeekStartDate, inferWorkoutType,
+  DAYS, DAY_SHORT,
+  type WorkoutType, type DayWorkout, type ParsedWeek,
+} from '../../lib/planParser'
 
 // ── Workout type colours / icons ─────────────────────────────────────────────
 
@@ -29,17 +33,86 @@ function WorkoutIcon({ type, className }: { type: WorkoutType; className?: strin
   }
 }
 
+// ── Activity helpers ─────────────────────────────────────────────────────────
+
+function formatDuration(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function groupActivitiesByDay(activities: Activity[], weekStart: Date): Map<string, Activity[]> {
+  const map = new Map<string, Activity[]>()
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 7)
+  for (const act of activities) {
+    if (!act.date) continue
+    const d = new Date(act.date + 'T12:00:00')
+    if (d >= weekStart && d < weekEnd) {
+      const dow = d.getDay()
+      const dayName = DAYS[dow === 0 ? 6 : dow - 1]
+      const arr = map.get(dayName) ?? []
+      arr.push(act)
+      map.set(dayName, arr)
+    }
+  }
+  return map
+}
+
+// ── Activity card ─────────────────────────────────────────────────────────────
+
+function ActivityCard({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <div className="min-h-[80px] rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700" />
+    )
+  }
+  const act = activities[0]
+  const extra = activities.length - 1
+  const stravaUrl = `https://www.strava.com/activities/${act.id}`
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-2.5 min-h-[80px]">
+      <div className="flex items-center gap-1">
+        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+        <a
+          href={stravaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 truncate leading-tight hover:underline"
+          onClick={e => e.stopPropagation()}
+        >
+          {act.name}
+        </a>
+      </div>
+      {act.distance_km != null && act.distance_km > 0 && (
+        <span className="text-[10px] text-zinc-500 dark:text-zinc-400">{act.distance_km.toFixed(1)} km</span>
+      )}
+      {act.moving_time_min != null && act.moving_time_min > 0 && (
+        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{formatDuration(act.moving_time_min)}</span>
+      )}
+      {act.avg_heartrate != null && (
+        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">♥ {act.avg_heartrate} bpm</span>
+      )}
+      {extra > 0 && (
+        <span className="mt-auto text-[9px] font-medium text-emerald-500">+{extra} more</span>
+      )}
+    </div>
+  )
+}
+
 // ── Calendar grid ─────────────────────────────────────────────────────────────
 
 interface WeekCalendarProps {
   week: ParsedWeek
+  weekStart: Date
+  activities: Activity[]
 }
 
-function WeekCalendar({ week }: WeekCalendarProps) {
+function WeekCalendar({ week, weekStart, activities }: WeekCalendarProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  // Index days by canonical name for O(1) lookup
   const byDay = Object.fromEntries(week.days.map(d => [d.day, d]))
+  const actsByDay = groupActivitiesByDay(activities, weekStart)
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,77 +123,105 @@ function WeekCalendar({ week }: WeekCalendarProps) {
         </div>
       )}
 
-      {/* 7-column grid */}
+      {/* Day headers — shared by both rows */}
       <div className="grid grid-cols-7 gap-2">
-        {DAYS.map((day, di) => {
-          const workout = byDay[day]
-          const style = TYPE_STYLE[workout?.type ?? 'rest']
-          const isExpanded = expanded === day
+        {DAYS.map((day, di) => (
+          <div key={day} className="text-center">
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              {DAY_SHORT[di]}
+            </span>
+          </div>
+        ))}
+      </div>
 
-          return (
-            <div key={day} className="flex flex-col gap-1">
-              {/* Day header */}
-              <div className="text-center">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-                  {DAY_SHORT[di]}
-                </span>
-              </div>
+      {/* ── Row 1: Completed activities ── */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-2">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+            Completed
+          </span>
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {DAYS.map(day => (
+            <ActivityCard key={day} activities={actsByDay.get(day) ?? []} />
+          ))}
+        </div>
+      </div>
 
-              {/* Workout card */}
-              <button
-                onClick={() => setExpanded(isExpanded ? null : day)}
-                disabled={!workout}
-                className={clsx(
-                  'flex flex-col gap-1.5 rounded-xl border p-2.5 text-left transition-all',
-                  'min-h-[80px] w-full',
-                  workout ? [style.bg, style.border, 'hover:shadow-sm cursor-pointer'] : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700 cursor-default',
-                  isExpanded && 'ring-2 ring-brand-400 ring-offset-1 dark:ring-offset-zinc-900',
-                )}
-              >
-                {workout ? (
-                  <>
-                    <div className="flex items-center gap-1.5">
-                      <WorkoutIcon type={workout.type} className={style.text} />
-                      <span className={clsx('text-xs font-semibold leading-tight', style.text)}>
-                        {workout.title}
-                      </span>
-                    </div>
-                    {/* Compact preview — first meaningful detail line */}
-                    {!isExpanded && (
-                      <p className="text-[11px] text-zinc-400 leading-snug line-clamp-3">
-                        {workout.details
-                          .split('\n')
-                          .filter(l => l.trim() && !l.trim().startsWith('#'))
-                          .slice(0, 3)
-                          .join(' · ')
-                          .replace(/\*+/g, '')}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-xs text-zinc-300 dark:text-zinc-600 font-medium">Rest</span>
-                )}
-              </button>
+      <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
-              {/* Expanded detail popover */}
-              {isExpanded && workout && (
-                <div
+      {/* ── Row 2: Scheduled plan ── */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-2">
+          <ClipboardList className="w-3.5 h-3.5 text-brand-500" />
+          <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wide">
+            Scheduled
+          </span>
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {DAYS.map((day) => {
+            const workout = byDay[day]
+            const style = TYPE_STYLE[workout?.type ?? 'rest']
+            const isExpanded = expanded === day
+
+            return (
+              <div key={day} className="flex flex-col gap-1">
+                {/* Workout card */}
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : day)}
+                  disabled={!workout}
                   className={clsx(
-                    'rounded-xl border p-3 text-xs shadow-lg z-10',
-                    style.bg, style.border,
+                    'flex flex-col gap-1.5 rounded-xl border p-2.5 text-left transition-all',
+                    'min-h-[80px] w-full',
+                    workout ? [style.bg, style.border, 'hover:shadow-sm cursor-pointer'] : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-100 dark:border-zinc-700 cursor-default',
+                    isExpanded && 'ring-2 ring-brand-400 ring-offset-1 dark:ring-offset-zinc-900',
                   )}
                 >
+                  {workout ? (
+                    <>
+                      <div className="flex items-center gap-1.5">
+                        <WorkoutIcon type={workout.type} className={style.text} />
+                        <span className={clsx('text-xs font-semibold leading-tight', style.text)}>
+                          {workout.title}
+                        </span>
+                      </div>
+                      {!isExpanded && (
+                        <p className="text-[11px] text-zinc-400 leading-snug line-clamp-3">
+                          {workout.details
+                            .split('\n')
+                            .filter(l => l.trim() && !l.trim().startsWith('#'))
+                            .slice(0, 3)
+                            .join(' · ')
+                            .replace(/\*+/g, '')}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-zinc-300 dark:text-zinc-600 font-medium">Rest</span>
+                  )}
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && workout && (
                   <div
-                    className="prose prose-xs dark:prose-invert max-w-none"
-                    style={{ fontSize: '11px', lineHeight: '1.5' }}
+                    className={clsx(
+                      'rounded-xl border p-3 text-xs shadow-lg z-10',
+                      style.bg, style.border,
+                    )}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{workout.details}</ReactMarkdown>
+                    <div
+                      className="prose prose-xs dark:prose-invert max-w-none"
+                      style={{ fontSize: '11px', lineHeight: '1.5' }}
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{workout.details}</ReactMarkdown>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -132,9 +233,10 @@ interface PlanViewProps {
   plan: Plan
   selectedWeek: number
   onWeekChange: (n: number) => void
+  activities: Activity[]
 }
 
-export function PlanView({ plan, selectedWeek, onWeekChange }: PlanViewProps) {
+export function PlanView({ plan, selectedWeek, onWeekChange, activities }: PlanViewProps) {
   const weeks = parsePlan(plan.plan)
   const safeWeek = Math.min(selectedWeek, weeks.length - 1)
   const current = weeks[safeWeek]
@@ -200,7 +302,11 @@ export function PlanView({ plan, selectedWeek, onWeekChange }: PlanViewProps) {
         <div className="mb-3">
           <h2 className="text-base font-semibold text-zinc-800 dark:text-zinc-100">{current.title}</h2>
         </div>
-        <WeekCalendar week={current} />
+        <WeekCalendar
+            week={current}
+            weekStart={deriveWeekStartDate(current.title, safeWeek, plan.updated_at)}
+            activities={activities}
+          />
       </div>
 
       {/* Footer */}

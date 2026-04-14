@@ -1,4 +1,4 @@
-import type { Plan } from '../types'
+import type { Plan, Activity } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
@@ -20,4 +20,5 @@ export const api = {
   acceptPlan: () => request<Plan>('/api/plan/accept', { method: 'POST' }),
   rejectPlan: () => request<void>('/api/plan/reject', { method: 'POST' }),
   triggerAdapt: () => request<AdaptResult>('/api/plan/adapt', { method: 'POST' }),
+  getActivities: (limit = 40) => request<{ activities: Activity[] }>(`/api/activities?limit=${limit}`),
 }

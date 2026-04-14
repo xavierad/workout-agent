@@ -102,3 +102,35 @@ export function parsePlan(markdown: string): ParsedWeek[] {
     return { title, summary, days }
   })
 }
+
+// ── Week date derivation ──────────────────────────────────────────────────────
+
+/**
+ * Derives the Monday start date of the nth plan week.
+ *
+ * Priority:
+ *  1. Explicit date in title — e.g. "Week of April 13" / "Week of April 13th"
+ *  2. Fallback — nearest Monday on/before `planUpdatedAt` + weekIndex × 7 days
+ */
+export function deriveWeekStartDate(
+  weekTitle: string,
+  weekIndex: number,
+  planUpdatedAt: string,
+): Date {
+  const m = weekTitle.match(/week\s+of\s+([a-zA-Z]+)\s+(\d{1,2})/i)
+  if (m) {
+    const refYear = new Date(planUpdatedAt || Date.now()).getFullYear()
+    const d = new Date(`${m[1]} ${parseInt(m[2], 10)}, ${refYear}`)
+    if (!isNaN(d.getTime())) {
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+  }
+  const base = new Date(planUpdatedAt || Date.now())
+  base.setHours(0, 0, 0, 0)
+  const dow = base.getDay() // 0 = Sun, 1 = Mon, …, 6 = Sat
+  const daysToMonday = dow === 0 ? -6 : 1 - dow
+  const monday = new Date(base)
+  monday.setDate(base.getDate() + daysToMonday + weekIndex * 7)
+  return monday
+}

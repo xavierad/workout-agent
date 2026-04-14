@@ -7,12 +7,14 @@ import { Chat } from './components/chat/Chat'
 import { usePlan } from './hooks/usePlan'
 import { useChat } from './hooks/useChat'
 import { useDarkMode } from './hooks/useDarkMode'
+import { useActivities } from './hooks/useActivities'
 import { ClipboardList, Info, X } from 'lucide-react'
 
 export default function App() {
   const { plan, loading, error, notification, infoMessage, setInfoMessage, isAdapting, accept, reject, triggerAdapt } = usePlan()
   const { messages, isThinking, activeTools, sendMessage, clearHistory } = useChat()
   const { preference, cycle } = useDarkMode()
+  const activities = useActivities()
   const [selectedWeek, setSelectedWeek] = useState(0)
   const [viewMode, setViewMode] = useState<'plan' | 'diff'>('plan')
 
@@ -79,6 +81,7 @@ export default function App() {
               plan={plan}
               selectedWeek={selectedWeek}
               onWeekChange={setSelectedWeek}
+              activities={activities}
             />
           )}
         </main>

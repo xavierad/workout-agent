@@ -1,3 +1,17 @@
+export interface Activity {
+  id: number
+  name: string
+  sport_type: string
+  date: string              // "YYYY-MM-DD"
+  distance_km: number | null
+  moving_time_min: number | null
+  elevation_m: number | null
+  avg_speed_kmh: number | null
+  avg_heartrate: number | null
+  avg_watts: number | null
+  suffer_score: number | null
+}
+
 export interface Plan {
   objective: string
   plan: string
