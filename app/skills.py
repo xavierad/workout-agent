@@ -99,8 +99,25 @@ def get_plan_objective() -> str:
 def save_plan(plan: str, objective: str = "") -> str:
     """Save an updated training plan to disk so it persists across sessions.
     Call this whenever you produce a new or modified training plan.
-    'plan' is the full plan text in Markdown. 'objective' is optional — if omitted the existing objective is kept."""
+    'plan' MUST be a properly structured Markdown training plan with week headings
+    (e.g. '## Week 1') and day entries (e.g. '### Monday'). Do NOT call this with
+    activity summaries, analysis text, or any content that is not a training plan.
+    'objective' is optional — if omitted the existing objective is kept."""
+    import re
     from datetime import datetime, timezone
+
+    # Validate the content looks like a training plan before overwriting
+    has_week = bool(re.search(r'^#{1,3}\s+week\s+\d+', plan, re.IGNORECASE | re.MULTILINE))
+    has_day = bool(re.search(
+        r'^(#{1,4}\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+        plan, re.IGNORECASE | re.MULTILINE,
+    ))
+    if not has_week and not has_day:
+        return (
+            "ERROR: save_plan requires a structured training plan (must contain week or day headings). "
+            "Do not call save_plan with activity data or analysis text."
+        )
+
     existing = json.loads(PLAN_FILE.read_text()) if PLAN_FILE.exists() else {}
     final_objective = objective.strip() or existing.get("objective", "")
     PLAN_FILE.write_text(json.dumps({
@@ -150,8 +167,9 @@ def calculate_required_pace(distance_km: float | str, target_time_min: float | s
     km_sec = int((pace_km - km_min) * 60)
     mi_min = int(pace_mile)
     mi_sec = int((pace_mile - mi_min) * 60)
+    total_min = float(target_time_min)
     return (f"Required pace: {km_min}:{km_sec:02d} /km  ({mi_min}:{mi_sec:02d} /mile)"
-            f"\nTotal duration: {int(target_time_min//60)}h {int(target_time_min%60)}m")
+            f"\nTotal duration: {int(total_min//60)}h {int(total_min%60)}m")
 
 
 @tool
